@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Terminal Banner Setup</title>
+<link rel="stylesheet" href="xterm.css" />
+<style>
+  :root{
+    --bg:#0a0a0a;
+    --panel:#1e1e2e;
+    --muted:#cdd6f4;
+    --accent:#a6e3a1;
+    --input:#2a2a3f;
+    --pink:#f38ba8;
+  }
+  html,body{height:100%; margin:0; background:var(--bg); font-family:Inter, "JetBrains Mono", monospace;}
+  .container { display:flex; height:100vh; gap:24px; padding:32px; box-sizing:border-box; align-items:center; justify-content:center; }
+  .left, .right { background:var(--panel); border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,0.6); }
+  .left { width:420px; padding:28px; color:var(--muted); }
+  .right { flex:1; min-width:520px; padding:18px; display:flex; align-items:center; justify-content:center; }
+  h2 { margin:0 0 10px 0; color:var(--muted); text-align:center; font-size:20px; }
+  form { display:flex; flex-direction:column; gap:10px; }
+  label { display:flex; flex-direction:column; font-size:13px; color:#dbe4ff; }
+  input[type=text], input[type=number], select {
+    margin-top:6px; padding:8px; background:var(--input); color:#fff; border:none; border-radius:6px; outline:none;
+  }
+  .row { display:flex; gap:8px; }
+  .small { width:120px; }
+  .wide { flex:1; }
+  .muted { font-size:12px; color:#9fb0d7; margin-top:4px; }
+  .error { color:var(--pink); font-size:13px; text-align:center; min-height:18px; }
+  button { margin-top:8px; padding:10px; border-radius:8px; border:none; background:var(--accent); color:#071017; font-weight:700; cursor:pointer; }
+  button:disabled{opacity:.6; cursor:default}
+  /* small preview terminal container */
+  .preview-wrap { width:100%; display:flex; justify-content:center; }
+  .preview-term { width:820px; height:240px; border-radius:10px; overflow:hidden; display:flex; flex-direction:column; background:#1e1e2e; }
+  .title-bar { height:28px; display:flex; align-items:center; padding:0 10px; gap:8px; }
+  .cir { width:12px; height:12px; border-radius:50%; }
+  .r{background:#f38ba8}.y{background:#f9e2af}.g{background:#a6e3a1}
+  /* ensure xterm preview uses our theme override */
+  .preview-term .xterm, .preview-term .xterm-viewport, .preview-term .xterm-screen { background:transparent !important; }
+  .small-note{font-size:12px;color:#9fb0d7;margin-top:6px}
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="left">
+      <h2>Terminal Banner Setup</h2>
+      <div class="error" id="errorMsg"></div>
+
+      <form id="terminalForm" autocomplete="off" novalidate>
+        <label>Username:
+          <input type="text" name="username" id="username" placeholder="e.g. akl" required />
+        </label>
+
+        <label>Hostname:
+          <input type="text" name="hostname" id="hostname" placeholder="e.g. akl001" required />
+        </label>
+
+        <label>Name:
+          <input type="text" name="name" id="name" placeholder="Your display name" required />
+        </label>
+
+        <label>Role:
+          <input type="text" name="role" id="role" value="Full Stack Developer" required />
+        </label>
+
+        <div class="row">
+          <label class="small">Age:
+            <input type="number" name="age" id="age" min="0" max="150" value="23" required />
+          </label>
+
+          <label class="wide">Location:
+            <input type="text" name="location" id="location" value="Morocco" required />
+          </label>
+        </div>
+
+        <label>Stack:
+          <input type="text" name="stack" id="stack" value="C | C++ | JS | PHP | Web" required />
+        </label>
+
+        <label>Hobbies:
+          <input type="text" name="hobbies" id="hobbies" value="AI | Open Source" />
+        </label>
+
+        <div class="row">
+          <label class="small">Font size:
+            <input type="number" name="fontsize" id="fontsize" min="10" max="30" value="16" required />
+          </label>
+
+          <label class="small">Padding:
+            <input type="number" name="padding" id="padding" min="0" max="20" value="2" required />
+          </label>
+
+          <label class="small">Width(chars):
+            <input type="number" name="termwidth" id="termwidth" min="40" max="200" value="80" required />
+          </label>
+        </div>
+
+        <label>Theme:
+          <select name="theme" id="theme">
+            <option value="catppuccin">Catppuccin</option>
+            <option value="matrix">Matrix</option>
+            <option value="cyber">Cyberpunk</option>
+          </select>
+        </label>
+
+        <div style="display:flex;gap:8px">
+          <button id="generateBtn" type="submit">Generate</button>
+          <button id="previewBtn" type="button">Live Preview</button>
+        </div>
+        <div class="small-note">Tip: required fields are highlighted by validation. You’ll be taken to the full preview to capture the banner.</div>
+      </form>
+    </div>
+
+    <div class="right">
+      <div style="width:100%; display:flex; flex-direction:column; gap:8px; align-items:center;">
+        <div class="preview-wrap">
+          <div class="preview-term" id="previewTermWindow">
+            <div class="title-bar" id="previewTitleBar">
+              <div class="cir r"></div><div class="cir y"></div><div class="cir g"></div>
+            </div>
+            <div id="previewTerminal" style="flex:1; padding:10px; overflow:hidden;"></div>
+          </div>
+        </div>
+        <div style="width:820px; display:flex; justify-content:space-between; color:#9fb0d7; font-size:13px;">
+          <div>Preview</div>
+          <div id="previewInfo">Theme: <span id="previewTheme">Catppuccin</span> · Width: <span id="previewWidth">80</span> chars</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script src="xterm.umd.js"></script>
+<script>
+  // Basic validation + submit -> terminal.html with params
+  const form = document.getElementById('terminalForm');
+  const err = document.getElementById('errorMsg');
+  form.addEventListener('submit', (e)=>{
+    e.preventDefault();
+    err.textContent = '';
+    const fd = new FormData(form);
+    const username = (fd.get('username')||'').trim();
+    const hostname = (fd.get('hostname')||'').trim();
+    const name = (fd.get('name')||'').trim();
+    const role = (fd.get('role')||'').trim();
+    const age = Number(fd.get('age'));
+    const fontsize = Number(fd.get('fontsize'));
+    const padding = Number(fd.get('padding'));
+    const termwidth = Number(fd.get('termwidth'));
+
+    if(!username || !hostname || !name || !role) { err.textContent = 'Please fill all required fields.'; return; }
+    if(Number.isNaN(age) || age < 0 || age > 150) { err.textContent='Enter a valid age.'; return; }
+    if(Number.isNaN(fontsize) || fontsize < 10 || fontsize > 30) { err.textContent='Font size must be 10–30.'; return; }
+    if(Number.isNaN(padding) || padding < 0 || padding > 20) { err.textContent='Padding must be 0–20.'; return; }
+    if(Number.isNaN(termwidth) || termwidth < 40 || termwidth > 200) { err.textContent='Terminal width must be 40–200.'; return; }
+
+    // build query and redirect
+    const params = new URLSearchParams();
+    for(const [k,v] of fd.entries()) params.append(k,v);
+    window.location.href = 'terminal.html?' + params.toString();
+  });
+
+  // Live preview setup
+  const previewTermDiv = document.getElementById('previewTerminal');
+  const previewTitleBar = document.getElementById('previewTitleBar');
+  const previewThemeSpan = document.getElementById('previewTheme');
+  const previewWidthSpan = document.getElementById('previewWidth');
+
+  // create a small terminal instance for preview
+  const previewTerm = new Terminal({cursorBlink:true, fontSize:14, theme:{foreground:'#cdd6f4', background:'#1e1e2e', cursor:'#f5c2e7'}});
+  previewTerm.open(previewTermDiv);
+
+  function updatePreview(){
+    const fd = new FormData(form);
+    const username = (fd.get('username')||'USER').trim();
+    const hostname = (fd.get('hostname')||'HOST').trim();
+    const name = (fd.get('name')||'').trim();
+    const role = (fd.get('role')||'').trim();
+    const fontsize = Number(fd.get('fontsize')) || 14;
+    const padding = Number(fd.get('padding')) || 2;
+    const termwidth = Number(fd.get('termwidth')) || 80;
+    const theme = fd.get('theme') || 'catppuccin';
+
+    // apply theme to preview terminal and titlebar
+    let fg='#cdd6f4', bg='#1e1e2e', cursor='#f5c2e7', titleBg='#2a2a3f';
+    if(theme==='matrix'){ fg='#0F0'; bg='black'; cursor='#0F0'; titleBg='black'; }
+    if(theme==='cyber'){ fg='#0FF'; bg='#001'; cursor='#FF0'; titleBg='#111'; }
+    previewTerm.setOption('fontSize', Math.max(12, Math.min(22, fontsize-2)));
+    previewTerm.setOption('theme', {foreground:fg, background:bg, cursor:cursor});
+    previewTermDiv.style.background = bg;
+    previewTitleBar.style.background = titleBg;
+
+    // build aboutMe lines (left aligned)
+    const aboutMe = [
+      `NAME     : ${name}`,
+      `ROLE     : ${role}`,
+      `AGE      : ${fd.get('age')||''}`,
+      `LOCATION : ${fd.get('location')||''}`,
+      `STACK    : ${fd.get('stack')||''}`,
+      `HOBBIES  : ${fd.get('hobbies')||''}`
+    ];
+
+    previewTerm.clear();
+    previewTerm.writeln(`\x1b[38;2;166;218;149m${username}@${hostname}:~$\x1b[0m cat ${username}.md`);
+    aboutMe.forEach(line => previewTerm.writeln(' '.repeat(Math.max(0,padding)) + line));
+    previewTerm.write(`\x1b[38;2;166;218;149m${username}@${hostname}:~$\x1b[0m `);
+
+    previewThemeSpan.textContent = theme;
+    previewWidthSpan.textContent = termwidth;
+  }
+
+  // attach events to update preview live
+  form.addEventListener('input', () => { updatePreview(); err.textContent=''; });
+  document.getElementById('previewBtn').addEventListener('click', updatePreview);
+
+  // initial preview
+  updatePreview();
+</script>
+</body>
+</html>

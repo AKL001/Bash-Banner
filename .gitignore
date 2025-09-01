@@ -1,0 +1,7 @@
+# Node modules
+node_modules/
+
+# Local HTML banner file
+my_bash_banner.html
+
+

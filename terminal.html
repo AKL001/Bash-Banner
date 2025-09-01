@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Terminal Banner Preview</title>
+<link rel="stylesheet" href="xterm.css" />
+<style>
+  :root{
+    --muted:#cdd6f4;
+    --pink:#f5c2e7;
+    --green:#a6e3a1;
+    --title-h:30px;
+  }
+  html,body{height:100%; margin:0; background:#000; font-family:'JetBrains Mono', monospace;}
+  #matrix-bg { position:fixed; inset:0; z-index:0; background:black; }
+  .term-window {
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:1584px; height:396px; max-width:95vw; max-height:90vh;
+    border-radius:12px; overflow:hidden; z-index:1;
+    box-shadow:0 12px 50px rgba(0,0,0,0.7);
+  }
+  .title-bar { height:var(--title-h); display:flex; align-items:center; padding:0 12px; gap:8px; }
+  .dot{ width:12px; height:12px; border-radius:50%; }
+  .dot.r{background:#f38ba8;} .dot.y{background:#f9e2af;} .dot.g{background:#a6e3a1;}
+  #terminal { width:100%; height:calc(100% - var(--title-h)); overflow:hidden; }
+  .xterm, .xterm-viewport, .xterm-screen { background:transparent !important; }
+  .hidden { display:none; }
+  #controlsTop { position:fixed; top:12px; left:12px; z-index:3; }
+  #captureBtn{ padding:8px 12px;border-radius:8px;border:none;background:var(--green); color:#071017; cursor:pointer; font-weight:700}
+  #status { position:fixed; right:12px; top:12px; z-index:3; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+  <canvas id="matrix-bg"></canvas>
+
+  <div class="term-window" id="term-window">
+    <div class="title-bar" id="title-bar">
+      <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+    </div>
+    <div id="terminal"></div>
+  </div>
+
+  <div id="controlsTop">
+    <button id="captureBtn">Capture</button>
+  </div>
+  <div id="status">Preparing...</div>
+
+<script src="xterm.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script>
+  // read params
+  const p = new URLSearchParams(window.location.search);
+  const username = (p.get('username')||'USER').trim();
+  const hostname = (p.get('hostname')||'HOST').trim();
+  const nameVal = (p.get('name')||'').trim();
+  const roleVal = (p.get('role')||'').trim();
+  const ageVal = (p.get('age')||'').trim();
+  const locationVal = (p.get('location')||'').trim();
+  const stackVal = (p.get('stack')||'').trim();
+  const hobbiesVal = (p.get('hobbies')||'').trim();
+  const fontsize = Math.max(10, Math.min(30, Number(p.get('fontsize')) || 16));
+  const padding = Math.max(0, Math.min(20, Number(p.get('padding')) || 2));
+  const termwidth = Math.max(40, Math.min(200, Number(p.get('termwidth')) || 80));
+  const theme = p.get('theme') || 'catppuccin';
+
+  // aboutMe labels kept, avoid exposing defaults
+  const aboutMe = [
+    `NAME     : ${nameVal}`,
+    `ROLE     : ${roleVal}`,
+    `AGE      : ${ageVal}`,
+    `LOCATION : ${locationVal}`,
+    `STACK    : ${stackVal}`,
+    `HOBBIES  : ${hobbiesVal}`
+  ];
+
+  // matrix canvas setup (only run when theme === 'matrix')
+  const canvas = document.getElementById('matrix-bg');
+  const ctx = canvas.getContext('2d');
+  function resizeCanvas(){
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  // only animate if matrix theme, otherwise keep canvas dark or hidden
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*()*&^%".split('');
+  let drops = [];
+  function startMatrix(){
+    const fontSizeM = 18;
+    const cols = Math.floor(canvas.width / fontSizeM);
+    drops = Array(cols).fill(1);
+    ctx.font = fontSizeM + "px VT323";
+    ctx.fillStyle = "#000";
+    function step(){
+      ctx.fillStyle = "rgba(0,0,0,0.08)";
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = "#0F0";
+      for(let i=0;i<drops.length;i++){
+        const ch = letters[Math.floor(Math.random()*letters.length)];
+        ctx.fillText(ch, i*fontSizeM, drops[i]*fontSizeM);
+        drops[i]++;
+        if(drops[i]*fontSizeM > canvas.height && Math.random() > 0.975) drops[i]=0;
+      }
+      matrixRaf = requestAnimationFrame(step);
+    }
+    step();
+    return () => cancelAnimationFrame(matrixRaf);
+  }
+  let stopMatrix = null;
+  if(theme === 'matrix') stopMatrix = startMatrix();
+  else {
+    // if not matrix, dim canvas so it doesn't show white gaps
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+
+  // theme colors for terminal and title-bar
+  let termFg = '#cdd6f4', termBg = '#1e1e2e', termCursor = '#f5c2e7', titleBg = '#2a2a3f';
+  if(theme === 'matrix'){ termFg='#0F0'; termBg='transparent'; termCursor='#0F0'; titleBg='#0b0b0b' }
+  if(theme === 'cyber'){ termFg='#89dceb'; termBg='#071428'; termCursor='#ffcc00'; titleBg='#020718' }
+
+  // apply title bar background
+  document.getElementById('title-bar').style.background = titleBg;
+  // apply window background (if termBg transparent, we want rounded window with translucent border)
+  const termWindow = document.getElementById('term-window');
+  if(termBg === 'transparent'){
+    termWindow.style.background = 'rgba(0,0,0,0.35)'; // keep window visible while terminal bg transparent
+  } else {
+    termWindow.style.background = termBg;
+  }
+
+  // create terminal
+  const termDiv = document.getElementById('terminal');
+  termDiv.style.padding = padding + 'px';
+  const term = new Terminal({
+    cursorBlink:true,
+    fontSize: fontsize,
+    theme: { foreground: termFg, background: termBg, cursor: termCursor },
+    cols: termwidth
+  });
+  term.open(termDiv);
+
+  // make xterm backgrounds transparent to let matrix show through when requested
+  // override via inline styles (ensures xterm.css won't show white areas)
+  const applyTransparency = () => {
+    const el = term.element;
+    if(el){
+      el.style.background = termBg === 'transparent' ? 'transparent' : termBg;
+      const viewport = el.querySelector('.xterm-viewport');
+      if(viewport) viewport.style.background = 'transparent';
+      const screen = el.querySelector('.xterm-screen');
+      if(screen) screen.style.background = 'transparent';
+    }
+  };
+  applyTransparency();
+
+  // Write the content (no extra vertical gap)
+  function writeTerminalContent(){
+    term.clear();
+    // colored prompt
+    term.writeln(`\x1b[38;2;166;218;149m${username}@${hostname}:~$\x1b[0m cat ${username}.md`);
+    // write aboutMe directly below prompt (left aligned)
+    aboutMe.forEach(line => {
+      term.writeln(' '.repeat(Math.max(0,padding)) + line);
+    });
+    term.writeln('');
+    term.write(`\x1b[38;2;166;218;149m${username}@${hostname}:~$\x1b[0m `);
+    document.getElementById('status').textContent = 'Ready — press Capture';
+  }
+  writeTerminalContent();
+
+  // HELPER: ensure term fully repaint then resolve
+  function waitForReflow(ms=50){ return new Promise(r=>setTimeout(r, ms)); }
+
+  // CAPTURE: reliably capture full terminal (temporarily expand to fit all rows)
+  async function captureTerminalPNG(){
+    const btn = document.getElementById('captureBtn');
+    btn.disabled = true;
+    document.getElementById('status').textContent = 'Capturing...';
+
+    // Save original sizes/styles
+    const originalTermWindowHeight = termWindow.style.height;
+    const originalTermDivHeight = termDiv.style.height;
+    const originalTermDivOverflow = termDiv.style.overflow;
+
+    // compute needed height to include all rows:
+    // the .xterm-viewport.scrollHeight should include all content
+    const xViewport = term.element.querySelector('.xterm-viewport');
+    const neededHeight = xViewport.scrollHeight || termDiv.scrollHeight || termDiv.clientHeight;
+
+    // set termDiv & termWindow heights temporarily to include everything
+    termDiv.style.overflow = 'visible';
+    termDiv.style.height = (neededHeight) + 'px';
+    termWindow.style.height = (neededHeight + 30) + 'px'; // 30 is title bar height CSS var
+    await waitForReflow(80); // give browser time to reflow
+
+    // draw canvas
+    try {
+      const canvasSnapshot = await html2canvas(termWindow, {backgroundColor:null, useCORS:true, scale:3});
+      const link = document.createElement('a');
+      link.download = `terminal_banner_${username}.png`;
+      link.href = canvasSnapshot.toDataURL('image/png');
+      link.click();
+      document.getElementById('status').textContent = 'Captured ✓';
+    } catch(e){
+      console.error(e);
+      document.getElementById('status').textContent = 'Capture failed — see console';
+    } finally {
+      // restore
+      termDiv.style.overflow = originalTermDivOverflow || 'hidden';
+      termDiv.style.height = originalTermDivHeight || '';
+      termWindow.style.height = originalTermWindowHeight || '';
+      btn.disabled = false;
+      await waitForReflow(100);
+    }
+  }
+
+  document.getElementById('captureBtn').addEventListener('click', captureTerminalPNG);
+
+  // small safety: reapply transparency if xterm changes
+  setTimeout(applyTransparency, 250);
+  window.setInterval(applyTransparency, 1000);
+
+</script>
+</body>
+</html>
